@@ -1,4 +1,11 @@
 # R/globals.R
+
+# 1. Google Fonts から Noto Sans JP を追加
+sysfonts::font_add_google("Noto Sans JP", "noto")
+
+# 2. showtext を有効化
+showtext::showtext_auto()
+
 utils::globalVariables(c(
   "++", ".data", "A", "IDn", "Like", "Question", "Ratio", "V1",
   "across", "actionButton", "all_of", "as.tibble", "checkboxGroupInput",
