@@ -1,3 +1,8 @@
+#' @import shiny
+#' @importFrom stats chisq.test reorder setNames
+#' @importFrom utils str
+NULL
+
 app_server <- function(input, output, session, initial_df = NULL) {
 
   # --- RDAファイル読込枠の動的UI生成 ---
@@ -124,41 +129,46 @@ app_server <- function(input, output, session, initial_df = NULL) {
 
   # barplot by ggplot2 動作確認用function
   output$barchart <- renderPlot({
+    req(data_for_plot(), input$variables, length(input$variables) > 0)
 #    print("--- barchart rendering started ---")
-    data_for_plot() %>% count(!!!rlang::syms(input$variables[1])) %>%
-      dplyr::rename(V1=1) %>%  filter(V1 != "非該当") %>%
-      mutate(rate=100 * .data[["n"]]/sum(.data[["n"]])) %>%
-      ggplot2::ggplot(aes(x=V1,y=rate)) + ggplot2::geom_col(aes(fill=V1)) +
+    data_for_plot() |> dplyr::count(!!!rlang::syms(input$variables[1])) |>
+      dplyr::rename(V1=1) |>  dplyr::filter(V1 != "非該当") |>
+      dplyr::mutate(rate=100 * .data[["n"]]/sum(.data[["n"]])) |>
+      ggplot2::ggplot(ggplot2::aes(x=V1,y=rate)) + ggplot2::geom_col(ggplot2::aes(fill=V1)) +
       ggplot2::ggtitle(input$variables[1])
   })
 
   output$barchart2 <- renderPlot({
-    data_for_plot() %>% count(!!!rlang::syms(input$select_input_data_for_hist)) %>% dplyr::rename(V1=1) %>% filter(V1 != "非該当") %>%
-      dplyr::mutate(rate=100* .data[["n"]]/ sum(.data[["n"]])) %>%
-      ggplot2::ggplot(aes(x=V1,y=rate)) + ggplot2::geom_col(aes(fill=V1)) + ggplot2::ggtitle(input$select_input_data_for_hist)
+    req(data_for_plot(), input$variables, length(input$variables) > 0)
+    data_for_plot() |> dplyr::count(!!!rlang::syms(input$select_input_data_for_hist)) |> dplyr::rename(V1=1) |> filter(V1 != "非該当") |>
+      dplyr::mutate(rate=100* .data[["n"]]/ sum(.data[["n"]])) |>
+      ggplot2::ggplot(ggplot2::aes(x=V1,y=rate)) + ggplot2::geom_col(ggplot2::aes(fill=V1)) + ggplot2::ggtitle(input$select_input_data_for_hist)
   })
 
 
 
   # GGally::ggpairs
   output$pairs <- renderPlot({
-    data_for_plot()[,c(input$variables[1],input$select_input_data_for_cross)] %>%
-      GGally::ggpairs(mapping = aes(color = !!as.name(input$variables[1]))) +
-      ggplot2::theme(axis.text.x = element_text(angle=45,hjust = 1)) +
+    req(data_for_plot(), input$variables, length(input$variables) > 0,input$select_input_data_for_cross)
+    data_for_plot()[,c(input$variables[1],input$select_input_data_for_cross)] |>
+      GGally::ggpairs(mapping = ggplot2::aes(color = !!as.name(input$variables[1]))) +
+      ggplot2::theme(axis.text.x = ggplot2::element_text(angle=45,hjust = 1)) +
       ggplot2::ggtitle(input$variables[1]) -> p
     p
   })
 
   output$pairs_multi<- renderPlot({
-    data_for_plot()[,input$variables] %>%
-      GGally::ggpairs(mapping = aes(color = !!as.name(input$variables))) +
-      ggplot2::theme(axis.text.x = element_text(angle=45,hjust = 1)) +
+    req(data_for_plot(), input$variables, length(input$variables) > 0)
+    data_for_plot()[,input$variables] |>
+      GGally::ggpairs(mapping = ggplot2::aes(color = !!as.name(input$variables))) +
+      ggplot2::theme(axis.text.x = ggplot2::element_text(angle=45,hjust = 1)) +
       ggplot2::ggtitle(input$variables) -> p
     p
   })
 
   # CA 2026/05/19,05/22追記/UIにも
   output$Crosstable_CA <- shiny::renderPlot({
+    req(data_for_plot(), input$variables, length(input$variables) > 0,input$select_input_data_for_cross)
     res.CA <- FactoMineR::CA(table(
       data_for_plot()[[input$variables[1]]],
       data_for_plot()[[input$select_input_data_for_cross]]
@@ -168,15 +178,22 @@ app_server <- function(input, output, session, initial_df = NULL) {
 
   # mosaic plot
   output$crosschart <- renderPlot({
+    req(
+      data_for_plot(),
+      input$variables,
+      length(input$variables) > 0,
+      input$select_input_data_for_cross,
+      input$select_input_data_for_cross != " "
+    )
     .tbl <- table(data_for_plot()[[input$select_input_data_for_cross]],
                   data_for_plot()[[input$variables[1]]])  #select_input_data_for_hist
     .tbl.p <- round(100 * prop.table(.tbl ,margin = 1),1)
     tab <- ifelse(.tbl.p < 1, NA, .tbl.p)
 
-    data_for_plot()[,c(input$select_input_data_for_cross,input$variables[1])] %>% #,     #select_input_data_for_hist,
-      vcd::structable() %>%
+    data_for_plot()[,c(input$select_input_data_for_cross,input$variables[1])] |> #,     #select_input_data_for_hist,
+      vcd::structable() |>
       vcd::mosaic(shade=TRUE,las=2,
-                  labeling=labeling_values
+                  labeling=vcd::labeling_values
       )
   })
   # 層化mosaic plot
@@ -189,8 +206,8 @@ app_server <- function(input, output, session, initial_df = NULL) {
     req(input$selected_categories, input$variables)
 
     # 【修正点1】選択されたカテゴリだけでデータを絞り込む
-    plot_df <- data_for_plot() %>%
-      filter(.data[[input$select_input_data_for_layer]] %in% input$selected_categories)
+    plot_df <- data_for_plot() |>
+      dplyr::filter(.data[[input$select_input_data_for_layer]] %in% input$selected_categories)
 
     .tbl <- table(plot_df[[input$select_input_data_for_cross]],
                   plot_df[[input$variables[1]]])  # select_input_data_for_hist
@@ -199,54 +216,54 @@ app_server <- function(input, output, session, initial_df = NULL) {
 
     plot_df[,c(input$variables[1], #select_input_data_for_hist,
                input$select_input_data_for_cross,
-               input$select_input_data_for_layer)] %>%
-      vcd::structable() %>%
+               input$select_input_data_for_layer)] |>
+      vcd::structable() |>
       vcd::mosaic(condvars = 3, # input$select_input_data_for_layer を指定
                   split_vertical = TRUE,# 分割は垂直
                   shade=TRUE,las=2,
-                  labeling=labeling_values
+                  labeling=vcd::labeling_values
       )
   })
 
 #   # gtsummary でクロス表表示
 #   output$my_gt_table <- render_gt(
-# #    plot_df %>% tbl_cross(col = input$select_input_data_for_cross,
-#     data_for_plot() %>% tbl_cross(col = input$select_input_data_for_cross,
+# #    plot_df |> tbl_cross(col = input$select_input_data_for_cross,
+#     data_for_plot() |> tbl_cross(col = input$select_input_data_for_cross,
 #                           row = input$variables[1], #select_input_data_for_hist,
-#                           percent = "row") %>%
-#       add_p(test="chisq.test") %>%
-#       bold_labels() %>%
+#                           percent = "row") |>
+#       add_p(test="chisq.test") |>
+#       bold_labels() |>
 #       as_gt()
 #   )
 #
 #   output$my_gt_table2 <- render_gt(
-# #   plot_df %>% tbl_cross(row = input$select_input_data_for_cross,
-#     data_for_plot() %>% tbl_cross(row = input$select_input_data_for_cross,
+# #   plot_df |> tbl_cross(row = input$select_input_data_for_cross,
+#     data_for_plot() |> tbl_cross(row = input$select_input_data_for_cross,
 #                           col = input$variables[1], #select_input_data_for_hist,
-#                           percent = "row") %>%
-#       add_p(test="chisq.test") %>%
-#       bold_labels() %>%
+#                           percent = "row") |>
+#       add_p(test="chisq.test") |>
+#       bold_labels() |>
 #       as_gt()
 #   )
 
   # 修正後（ gt::render_gt に変更 ）
   output$my_gt_table <- gt::render_gt(
-    data_for_plot() %>%
+    data_for_plot() |>
       gtsummary::tbl_cross(col = input$select_input_data_for_cross,
                            row = input$variables[1],
-                           percent = "row") %>%
-      gtsummary::add_p(test = "chisq.test") %>%
-      gtsummary::bold_labels() %>%
+                           percent = "row") |>
+      gtsummary::add_p(test = "chisq.test") |>
+      gtsummary::bold_labels() |>
       gtsummary::as_gt()
   )
 
   output$my_gt_table2 <- gt::render_gt(
-    data_for_plot() %>%
+    data_for_plot() |>
       gtsummary::tbl_cross(row = input$select_input_data_for_cross,
                            col = input$variables[1],
-                           percent = "row") %>%
-      gtsummary::add_p(test = "chisq.test") %>%
-      gtsummary::bold_labels() %>%
+                           percent = "row") |>
+      gtsummary::add_p(test = "chisq.test") |>
+      gtsummary::bold_labels() |>
       gtsummary::as_gt()
   )
 
@@ -270,21 +287,21 @@ app_server <- function(input, output, session, initial_df = NULL) {
 
   # # gtsummay でMA表
   # output$MA_gt_table <- render_gt(
-  #   data_for_plot() %>% tbl_cross(row = input$select_input_data_for_cross,
+  #   data_for_plot() |> tbl_cross(row = input$select_input_data_for_cross,
   #                                 col = input$variables[1],#select_input_data_for_hist,
-  #                                 percent = "row") %>%
-  #     add_p(test="chisq.test") %>%
-  #     bold_labels() %>%
+  #                                 percent = "row") |>
+  #     add_p(test="chisq.test") |>
+  #     bold_labels() |>
   #     as_gt()
   # )
 
   output$MA_gt_table <- gt::render_gt(
-    data_for_plot() %>%
+    data_for_plot() |>
       gtsummary::tbl_cross(row = input$select_input_data_for_cross,
                            col = input$variables[1],
-                           percent = "row") %>%
-      gtsummary::add_p(test = "chisq.test") %>%
-      gtsummary::bold_labels() %>%
+                           percent = "row") |>
+      gtsummary::add_p(test = "chisq.test") |>
+      gtsummary::bold_labels() |>
       gtsummary::as_gt()
   )
 
@@ -294,10 +311,10 @@ app_server <- function(input, output, session, initial_df = NULL) {
     if (length(selected_vars) > 0) {
       # 選択された変数を用いてプロット
       selected_data <- data_for_plot()[, selected_vars, drop = FALSE]
-      selected_data %>% dplyr::reframe(across(everything(), ~ mean(. == 1,na.rm =TRUE))) %>%
+      selected_data |> dplyr::reframe(across(everything(), ~ mean(. == 1,na.rm =TRUE))) |>
         tidyr::pivot_longer(cols = everything(), names_to = "Question", values_to = "Ratio") -> ratio_df
 
-      ggplot2::ggplot(ratio_df, aes(x = Question, y = Ratio)) +
+      ggplot2::ggplot(ratio_df, ggplot2::aes(x = Question, y = Ratio)) +
         ggplot2::geom_bar(stat = "identity", fill = "skyblue") +
         ggplot2::scale_y_continuous(labels = scales::percent_format()) +
         ggplot2::labs(title = selected_vars,
@@ -314,16 +331,16 @@ app_server <- function(input, output, session, initial_df = NULL) {
     if (length(selected_vars) > 0) {
       # 選択された変数を用いてプロット
       selected_data <- data_for_plot()[, selected_vars, drop = FALSE]
-      selected_data %>% dplyr::reframe(across(everything(), ~ mean(. == 1,na.rm =TRUE))) %>%
+      selected_data |> dplyr::reframe(across(everything(), ~ mean(. == 1,na.rm =TRUE))) |>
         tidyr::pivot_longer(cols = everything(), names_to = "Question", values_to = "Ratio") -> ratio_df
 
-      ratio_df %>%
-        ggplot2::ggplot(aes(x=Ratio, y=reorder(Question,Ratio))) + # 並べ替え
+      ratio_df |>
+        ggplot2::ggplot(ggplot2::aes(x=Ratio, y=reorder(Question,Ratio))) + # 並べ替え
         ggplot2::geom_point(size=3) +
         ggplot2::theme_bw() +
-        ggplot2::theme(panel.grid.major.x = element_blank(),
-                       panel.grid.minor.x = element_blank(),
-                       panel.grid.major.y = element_line(colour="grey60",linetype="dashed")) +
+        ggplot2::theme(panel.grid.major.x = ggplot2::element_blank(),
+                       panel.grid.minor.x = ggplot2::element_blank(),
+                       panel.grid.major.y = ggplot2::element_line(colour="grey60",linetype="dashed")) +
         ggplot2::labs(title = selected_vars,
                       x = "割合（% )",y = "質問項目")
     }
@@ -375,8 +392,8 @@ app_server <- function(input, output, session, initial_df = NULL) {
     req(input$selected_categories, input$variables)
 
     # 【修正点1】選択されたカテゴリだけでデータを絞り込む
-    plot_df <- data_for_plot() %>%
-      filter(.data[[input$select_input_data_for_layer]] %in% input$selected_categories)
+    plot_df <- data_for_plot() |>
+      dplyr::filter(.data[[input$select_input_data_for_layer]] %in% input$selected_categories)
 
     selected_vars <- input$variables
     gp_vari <- input$select_input_data_for_layer # 層化変数名
@@ -384,18 +401,18 @@ app_server <- function(input, output, session, initial_df = NULL) {
     if (length(selected_vars) > 0) {
 
       # 【修正点2】data_for_plot() ではなく、絞り込んだ「plot_df」を使って集計する！
-      plot_df %>%
-        group_by(!!!rlang::syms(gp_vari)) %>%
+      plot_df |>
+        dplyr::group_by(!!!rlang::syms(gp_vari)) |>
         dplyr::reframe(
-          度数 = n(),
-          across(all_of(selected_vars), ~ sum(. == 1, na.rm = TRUE) / n(), .names = "ratio_{col}")
+          度数 = dplyr::n(),
+          across(all_of(selected_vars), ~ sum(. == 1, na.rm = TRUE) / dplyr::n(), .names = "ratio_{col}")
         ) -> MA_group_tbl
 
       # 集計結果が空でないか確認
       req(nrow(MA_group_tbl) > 0)
 
-      MA_group_tbl %>%
-        select(-度数) %>%
+      MA_group_tbl |>
+        dplyr::select(-度数) |>
         tidyr::pivot_longer(
           cols = starts_with("ratio_"),
           names_to = "variable",
@@ -403,10 +420,10 @@ app_server <- function(input, output, session, initial_df = NULL) {
         ) -> df_long
 
       # グラフ描画
-      ggplot2::ggplot(df_long, aes(x = !!as.name(gp_vari), y = value,
+      ggplot2::ggplot(df_long, ggplot2::aes(x = !!as.name(gp_vari), y = value,
                                    shape = variable, group = variable)) +
-        ggplot2::geom_line(aes(color = variable)) +
-        ggplot2::geom_point(aes(color = variable), size = 4) +
+        ggplot2::geom_line(ggplot2::aes(color = variable)) +
+        ggplot2::geom_point(ggplot2::aes(color = variable), size = 4) +
         ggplot2::labs(x = gp_vari, y = "割合", shape = "変数", color = "変数") +
         ggplot2::theme_minimal() +
         ggplot2::scale_color_discrete() +
@@ -424,8 +441,8 @@ app_server <- function(input, output, session, initial_df = NULL) {
     )
     req(input$selected_categories, input$variables)
     # 【修正点1】選択されたカテゴリだけでデータを絞り込む
-    plot_df <- data_for_plot() %>%
-      filter(.data[[input$select_input_data_for_layer]] %in% input$selected_categories)
+    plot_df <- data_for_plot() |>
+      dplyr::filter(.data[[input$select_input_data_for_layer]] %in% input$selected_categories)
 
     selected_vars <- input$variables
 
@@ -433,17 +450,17 @@ app_server <- function(input, output, session, initial_df = NULL) {
       selected_data <- data_for_plot()[, selected_vars, drop = FALSE]
       gp_vari <- input$select_input_data_for_layer # 層化変数
       ## data_for plot ではなく、plot_dfを使う
-      plot_df %>% group_by(!!!rlang::syms(gp_vari)) %>%
-        dplyr::reframe(度数=n(),across(selected_vars, ~ sum(. == 1,na.rm = TRUE)/n(),.names="ratio_{col}")) -> MA_group_tbl # ここで、行を選択すればいよい
-      MA_group_tbl %>% select(-度数) %>%
+      plot_df |> dplyr::group_by(!!!rlang::syms(gp_vari)) |>
+        dplyr::reframe(度数=dplyr::n(),across(selected_vars, ~ sum(. == 1,na.rm = TRUE)/dplyr::n(),.names="ratio_{col}")) -> MA_group_tbl # ここで、行を選択すればいよい
+      MA_group_tbl |> dplyr::select(-度数) |>
         tidyr::pivot_longer(cols = starts_with("ratio_"),  # ratio_で始まる列 (変数1〜8) をlong形式に変換
                             names_to = "variable",         # 変数名の列を"variable"として格納
                             values_to = "value") -> df_long
 
-      ggplot2::ggplot(df_long, aes(x = !!as.name(gp_vari), y = value, #color = variable,
+      ggplot2::ggplot(df_long, ggplot2::aes(x = !!as.name(gp_vari), y = value, #color = variable,
                                    shape =variable, group = variable)) +
-        ggplot2::geom_line(aes(color = variable)) +  # 折れ線グラフ
-        ggplot2::geom_point(aes(color = variable),size=4) + # ポイントを追加（必要なら )
+        ggplot2::geom_line(ggplot2::aes(color = variable)) +  # 折れ線グラフ
+        ggplot2::geom_point(ggplot2::aes(color = variable),size=4) + # ポイントを追加（必要なら )
         ggplot2::labs(x = gp_vari, y = "割合", shape = "変数",color = "変数") +  # 軸ラベルと凡例の設定
         ggplot2::theme_minimal() +  # 見た目をシンプルに
         ggplot2::scale_color_discrete() +
@@ -463,29 +480,29 @@ app_server <- function(input, output, session, initial_df = NULL) {
     )
     req(input$selected_categories, input$variables)
     # 【修正点1】選択されたカテゴリだけでデータを絞り込む
-    plot_df <- data_for_plot() %>%
-      filter(.data[[input$select_input_data_for_layer]] %in% input$selected_categories)
+    plot_df <- data_for_plot() |>
+      dplyr::filter(.data[[input$select_input_data_for_layer]] %in% input$selected_categories)
 
     selected_vars <- input$variables # 選択された変数群
     if (length(selected_vars) > 0) {
       selected_data <- data_for_plot()[, selected_vars, drop = FALSE]
 
       gp_vari <- input$select_input_data_for_layer # 層化する変数
-      plot_df %>% dplyr::group_by(!!!rlang::syms(gp_vari)) %>%
-        dplyr::reframe(度数=n(),across(selected_vars, ~ sum(. == 1,na.rm = TRUE)/n(),.names="ratio_{col}")) -> MA_group_tbl
+      plot_df |> dplyr::group_by(!!!rlang::syms(gp_vari)) |>
+        dplyr::reframe(度数=dplyr::n(),across(selected_vars, ~ sum(. == 1,na.rm = TRUE)/dplyr::n(),.names="ratio_{col}")) -> MA_group_tbl
 
-      MA_group_tbl %>% select(-度数) %>%
+      MA_group_tbl |> dplyr::select(-度数) |>
         tidyr::pivot_longer(cols = starts_with("ratio_"),  # ratio_で始まる列 (変数1〜8) をlong形式に変換
                             names_to = "variable",         # 変数名の列を"variable"として格納
                             values_to = "value") -> df_long
 
 
-      ggplot2::ggplot(df_long, aes(x = !!as.name(gp_vari), y = value, color = variable, group = variable)) +
-        ggplot2::geom_line() + geom_point() +
+      ggplot2::ggplot(df_long, ggplot2::aes(x = !!as.name(gp_vari), y = value, color = variable, group = variable)) +
+        ggplot2::geom_line() + ggplot2::geom_point() +
         ggplot2::facet_wrap(~ variable,ncol=3) +# scales = "free_y") + # 各変数ごとにfacetで分割
         ggplot2::labs(x = "Group", y = "Value") +
         ggplot2::theme_minimal() +
-        ggplot2::theme(legend.position = "none",axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))  # ラベルを90度回転
+        ggplot2::theme(legend.position = "none",axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5, hjust = 1))  # ラベルを90度回転
 
     }
   })
@@ -502,22 +519,22 @@ app_server <- function(input, output, session, initial_df = NULL) {
     }
 
     # df の 1 列目から 20 列目の各列ごとにカテゴリを集計
-    category_count_tbl <- data_for_plot() %>%
+    category_count_tbl <- data_for_plot() |>
       #dplyr::summarise(across(selected_vars, ~ count_categories(.)))
       dplyr::reframe(across(selected_vars, ~ count_categories(.)))
 
-    category_count_tbl %>% as.matrix() -> cat_tbl
+    category_count_tbl |> as.matrix() -> cat_tbl
     rownames(cat_tbl) <- c("++","+","-","--","DK","無回答")
     cat_tbl
 
     rownames(t(cat_tbl)) -> rnames
-    t(cat_tbl) %>% tibble::as.tibble() %>% mutate(ID=rnames,IDn=1:length(rnames)) %>%
-      dplyr::mutate(Like=`++`+`+`) %>%
-      dplyr::arrange(desc(Like)) %>%
-      dplyr::select(IDn) %>% unlist %>%
+    t(cat_tbl) |> tibble::as.tibble() |> dplyr::mutate(ID=rnames,IDn=1:length(rnames)) |>
+      dplyr::mutate(Like=`++`+`+`) |>
+      dplyr::arrange(desc(Like)) |>
+      dplyr::select(IDn) |> unlist() |>
       setNames(NULL) -> order_vec
 
-    t(cat_tbl)[order_vec,] %>%
+    t(cat_tbl)[order_vec,] |>
       vcd::mosaic(shade = TRUE,rot_labels = c(0, 0),
                   margins=c(left=9,top=5),just_labels=c(left="right",top="left"))
 
@@ -532,11 +549,11 @@ app_server <- function(input, output, session, initial_df = NULL) {
     }
 
     # df の 1 列目から 20 列目の各列ごとにカテゴリを集計
-    category_count_tbl <- data_for_plot() %>%
+    category_count_tbl <- data_for_plot() |>
       #dplyr::summarise(across(selected_vars, ~ count_categories(.)))
       dplyr::reframe(across(selected_vars, ~ count_categories(.)))
 
-    category_count_tbl %>% as.matrix() -> cat_tbl
+    category_count_tbl |> as.matrix() -> cat_tbl
     rownames(cat_tbl) <- c("++","+","-","--","DK","無回答")
     cat_tbl
 
@@ -555,22 +572,22 @@ app_server <- function(input, output, session, initial_df = NULL) {
     }
 
     # df の 1 列目から 20 列目の各列ごとにカテゴリを集計
-    category_count_tbl <- data_for_plot() %>%
+    category_count_tbl <- data_for_plot() |>
       dplyr::reframe(across(selected_vars, ~ count_categories(.)))
 
-    category_count_tbl %>% as.matrix() -> cat_tbl
+    category_count_tbl |> as.matrix() -> cat_tbl
     rownames(cat_tbl) <- grid_ptn
     cat_tbl
 
     rownames(t(cat_tbl)) -> rnames
-    t(cat_tbl) %>% as.tibble() %>% dplyr::mutate(ID=rnames,IDn=1:length(rnames)) %>%
-      #        mutate(Like=`++`+`+`) %>%
-      dplyr::arrange(desc(A)) %>%
-      dplyr::select(IDn) %>% unlist %>%
+    t(cat_tbl) |> as.tibble() |> dplyr::mutate(ID=rnames,IDn=1:length(rnames)) |>
+      #        mutate(Like=`++`+`+`) |>
+      dplyr::arrange(desc(A)) |>
+      dplyr::select(IDn) |> unlist() |>
       setNames(NULL) -> order_vec
 
     #      t(cat_tbl)[order_vec,]
-    t(cat_tbl) %>% vcd::mosaic(shade = TRUE,rot_labels = c(0, 0),
+    t(cat_tbl) |> vcd::mosaic(shade = TRUE,rot_labels = c(0, 0),
                                margins=c(left=9,top=5),just_labels=c(left="right",top="left"))
 
   })
@@ -586,10 +603,10 @@ app_server <- function(input, output, session, initial_df = NULL) {
     }
 
     # df の 1 列目から 20 列目の各列ごとにカテゴリを集計
-    category_count_tbl <- data_for_plot() %>%
+    category_count_tbl <- data_for_plot() |>
       dplyr::reframe(across(selected_vars, ~ count_categories(.)))
 
-    category_count_tbl %>% as.matrix() -> cat_tbl
+    category_count_tbl |> as.matrix() -> cat_tbl
     rownames(cat_tbl) <- grid_ptn #c("++","+","-","--","DK","無回答")
     cat_tbl
 
@@ -601,19 +618,20 @@ app_server <- function(input, output, session, initial_df = NULL) {
   # Grid Mosaic Genenral
 
   output$GridAnswerG_mosaic <- renderPlot({
-    req(input$variables)
+    req(data_for_plot(), input$variables, length(input$variables) > 0)
+#    req(input$variables)
     selected_vars <- input$variables
 
     # 【★超重要・一撃必殺の防弾処理】
     # 選択された列のデータを、Factor型から「ただのプレーンな文字列型(character)」に強制変換する
     # これにより、3838環境下での "1", "2" への化けを根絶します
-    cleaned_data <- data_for_plot() %>%
+    cleaned_data <- data_for_plot() |>
       dplyr::mutate(across(dplyr::all_of(selected_vars), as.character))
 
     # 1. 以降の集計は、すべてこの文字列化した「cleaned_data」をベースに行う！
     vectors <- purrr::map(selected_vars, ~ {
-      cleaned_data %>%
-        dplyr::pull(!!sym(.x)) %>%
+      cleaned_data |>
+        dplyr::pull(!!sym(.x)) |>
         unique()
     })
 
@@ -626,7 +644,7 @@ app_server <- function(input, output, session, initial_df = NULL) {
     }
 
     # 2. selected_vars の各列ごとにカテゴリを集計
-    category_count_tbl <- cleaned_data %>%
+    category_count_tbl <- cleaned_data |>
       dplyr::reframe(across(dplyr::all_of(selected_vars), ~ count_categories(.)))
 
     # （※これ以降の3、4、5、6の行列変換・描画コードは、今のままで全く触らなくて大丈夫です！）
@@ -650,7 +668,7 @@ app_server <- function(input, output, session, initial_df = NULL) {
 
     # 6. 完全に構造が保証された table を mosaic に投入 2026/07/10　shade=TRUEを削除。col_matrixをつくり、使う
 
-    final_table %>%
+    final_table |>
       vcd::mosaic(#shade = TRUE,
                   rot_labels = c(0, 0),
                   margins = c(left = 12, top = 5),
@@ -667,12 +685,12 @@ app_server <- function(input, output, session, initial_df = NULL) {
     # グラフを描く直前と「100%完全に同じデータ」をここでもう一度再現する
     selected_vars <- input$variables
     vectors <- purrr::map(selected_vars, ~ {
-      data_for_plot() %>% dplyr::pull(!!sym(.x)) %>% unique()
+      data_for_plot() |> dplyr::pull(!!sym(.x)) |> unique()
     })
     union_all <- reduce(vectors, union)
     union_all <- ifelse(is.na(union_all), "NA", union_all)
     count_categories <- function(x) table(factor(x, levels = union_all, exclude = NULL))
-    category_count_tbl <- data_for_plot() %>% dplyr::reframe(across(dplyr::all_of(selected_vars), ~ count_categories(.)))
+    category_count_tbl <- data_for_plot() |> dplyr::reframe(across(dplyr::all_of(selected_vars), ~ count_categories(.)))
     cat_tbl <- as.matrix(category_count_tbl)
     rownames(cat_tbl) <- union_all
     mat_t <- t(cat_tbl)
@@ -689,12 +707,13 @@ app_server <- function(input, output, session, initial_df = NULL) {
 
   # GridAnswerG CA
   output$GridAnswerG_CA <- renderPlot({
-    req(input$variables)
+    req(data_for_plot(), input$variables, length(input$variables) > 0)
+#    req(input$variables)
     selected_vars <- input$variables
     #browser()
     vectors <- purrr::map(selected_vars, ~ {
-      data_for_plot() %>% dplyr::select(selected_vars) %>%
-        dplyr::count(!!sym(.x)) %>%  # 選択した列ごとにカウント
+      data_for_plot() |> dplyr::select(selected_vars) |>
+        dplyr::count(!!sym(.x)) |>  # 選択した列ごとにカウント
         dplyr::pull(1)               # 最初の列のユニークな値を取得
     })
 
@@ -705,11 +724,11 @@ app_server <- function(input, output, session, initial_df = NULL) {
     }
 
     # df のselected_varsの各列ごとにカテゴリを集計
-    category_count_tbl <- data_for_plot() %>%
+    category_count_tbl <- data_for_plot() |>
       #dplyr::summarise(across(selected_vars, ~ count_categories(.)))
       dplyr::reframe(across(selected_vars, ~ count_categories(.)))
 
-    category_count_tbl %>% as.matrix() -> cat_tbl
+    category_count_tbl |> as.matrix() -> cat_tbl
     rownames(cat_tbl) <- union_all #grid_ptn
     cat_tbl
 
@@ -740,7 +759,7 @@ app_server <- function(input, output, session, initial_df = NULL) {
 
 
   output$table_for_plot <- DT::renderDataTable({
-    data_for_plot() %>% select(input$variables)
+    data_for_plot() |> dplyr::select(input$variables)
   })
 
 }

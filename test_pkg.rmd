@@ -1,0 +1,34 @@
+---
+title: "test_pkg"
+author: "kazuo.fujimoto2007@gmail.com"
+date: "2026-09-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(shiny)
+library(tidyverse)
+```
+
+```{r}
+load("../../RStudio/MCA-chap5/d0.rda")
+.d0 -> d0
+
+load("../../RStudio/UTAS2024/df_base3a.rda")
+```
+
+```{r}
+# 1. 現在のプロジェクト（R/ 配下の最新コード）を一括ロード
+devtools::load_all(".")
+
+# 2. テスト用データフレームを用意（または環境内の既存dfを指定）
+test_df <- d0
+
+# 3. 最新のデバッグコードが仕込まれた関数を実行
+run_ENQview(df = UTAS2020_a)
+```
+
