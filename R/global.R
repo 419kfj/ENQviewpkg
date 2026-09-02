@@ -2,13 +2,11 @@
 
 library(showtext)
 
-# 1. フォントの取得と登録（"noto" という名前で登録）
-sysfonts::font_add_google("Noto Sans JP", "noto")
+# Linux OS に入った Noto Sans CJK JP を指定
+sysfonts::font_add("noto", "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc")
+showtext::showtext_auto(TRUE)
 
-# 2. showtext の有効化（TRUE を明示して OK です！）
-showtext_auto(TRUE)
-
-# 3. ggplot2 全体のデフォルトフォントを "noto" に切り替える（★これが必須です！）
+# ggplot2 のデフォルトに設定
 ggplot2::theme_set(ggplot2::theme_minimal(base_family = "noto"))
 
 utils::globalVariables(c(
