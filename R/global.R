@@ -1,10 +1,15 @@
 # R/globals.R
 
-# 1. Google Fonts から Noto Sans JP を追加
+library(showtext)
+
+# 1. フォントの取得と登録（"noto" という名前で登録）
 sysfonts::font_add_google("Noto Sans JP", "noto")
 
-# 2. showtext を有効化
-showtext::showtext_auto()
+# 2. showtext の有効化（TRUE を明示して OK です！）
+showtext_auto(TRUE)
+
+# 3. ggplot2 全体のデフォルトフォントを "noto" に切り替える（★これが必須です！）
+ggplot2::theme_set(ggplot2::theme_minimal(base_family = "noto"))
 
 utils::globalVariables(c(
   "++", ".data", "A", "IDn", "Like", "Question", "Ratio", "V1",
